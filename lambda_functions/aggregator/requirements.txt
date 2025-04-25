@@ -4,4 +4,4 @@ boto3
 pytest-mock
 pytest-cov
 pytest-asyncio
-pytest-asyncio-plugin
+
