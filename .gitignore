@@ -1,5 +1,4 @@
 # .gitignore
-samconfig.toml
 .aws-sam
 .aws-sam/build
 .pytest_cache
