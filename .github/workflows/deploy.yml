@@ -38,13 +38,11 @@ jobs:
       # Build the AWS SAM project
       - name: Build the AWS SAM project
         run: |
-          cd lambda_functions/aggregator  
           sam build
 
       # Validate SAM template
       - name: Validate SAM template
-        run: |
-          cd lambda_functions/aggregator  
+        run: | 
           sam validate --lint
 
       # Run unit tests for the Lambda function using unittest
