@@ -1,0 +1,195 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  AWS SAM template for an event-driven data pipeline reading CSVs from S3,
+  processing via Kinesis and Lambda, writing to DynamoDB, and archiving
+  qualifying data to S3 for Athena.
+
+Globals:
+  Function:
+    Timeout: 90
+    Runtime: python3.11
+    MemorySize: 128
+    Architectures:
+      - x86_64
+
+Parameters:
+  UploadBucketName:
+    Type: String
+    Description: Name for the S3 bucket where CSV files will be uploaded.
+    Default: my-upload-bucket
+  AthenaBucketName:
+    Type: String
+    Description: Name for the S3 bucket where qualifying data will be archived for Athena.
+  KinesisStreamName:
+    Type: String
+    Description: Name for the Kinesis Data Stream.
+  DynamoDBTableName:
+    Type: String
+    Description: Name for the DynamoDB table.
+    Default: my-dynamodb-table
+  DynamoDBTableReadCapacityUnits:
+    Type: Number
+    Default: 5
+    Description: Read capacity units for the DynamoDB table.
+    
+
+  DynamoDBTableWriteCapacityUnits:
+    Type: Number
+    Default: 5
+    Description: Write capacity units for the DynamoDB table.
+
+Resources:
+  # S3 Bucket for CSV uploads - Triggers the Producer Lambda
+  S3UploadBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref UploadBucketName
+
+  # S3 Bucket for archived data for Athena querying
+  S3AthenaBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref AthenaBucketName
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+
+  # Kinesis Data Stream - Intermediate storage between producer and consumer
+  KinesisDataStream:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      Name: !Ref KinesisStreamName
+      
+      ShardCount: 1
+
+  # DynamoDB Table - Final destination for processed data
+  DynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref DynamoDBTableName
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+          
+      ProvisionedThroughput:
+        ReadCapacityUnits: !Ref DynamoDBTableReadCapacityUnits
+        WriteCapacityUnits: !Ref DynamoDBTableWriteCapacityUnits
+
+  # Lambda Function (Producer) - Reads CSV from S3 and writes to Kinesis
+  ProducerLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: lambda_functions/producer/app.lambda_handler
+      Timeout: 90
+      MemorySize: 128
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref UploadBucketName
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - kinesis:PutRecord
+                - kinesis:PutRecords
+              Resource: !GetAtt KinesisDataStream.Arn
+      Events:
+        S3Upload:
+          Type: S3
+          Properties:
+            Bucket: !Ref S3UploadBucket
+            Events: s3:ObjectCreated:*
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: suffix
+                    Value: .csv
+      Environment:
+        Variables:
+          KINESIS_STREAM_NAME: !Ref KinesisStreamName
+          UPLOAD_BUCKET_NAME: !Ref UploadBucketName
+
+  # Lambda Function (Consumer) - Reads from Kinesis, writes to DynamoDB, archives to S3
+  ConsumerLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: lambda_functions/consumer/app.lambda_handler
+      Timeout: 90
+      MemorySize: 256
+      Policies:
+        - KinesisStreamReadPolicy:
+            StreamName: !Ref KinesisStreamName
+        - DynamoDBCrudPolicy:
+            TableName: !Ref DynamoDBTableName
+        - S3WritePolicy:
+            BucketName: !Ref AthenaBucketName
+      Events:
+        KinesisStream:
+          Type: Kinesis
+          Properties:
+            Stream: !GetAtt KinesisDataStream.Arn
+            StartingPosition: TRIM_HORIZON
+            BatchSize: 100
+            Enabled: true
+      Environment:
+        Variables:
+          DYNAMODB_TABLE_NAME: !Ref DynamoDBTableName
+          ATHENA_BUCKET_NAME: !Ref AthenaBucketName
+          KINESIS_STREAM_NAME: !Ref KinesisStreamName
+
+  AggregatorLambdaFunction:
+      Type: AWS::Serverless::Function
+      Properties:
+        CodeUri: ./lambda_functions/aggregator
+        Handler: app.lambda_handler
+        Timeout: 900
+        MemorySize: 128
+        Policies:
+          - DynamoDBCrudPolicy:
+              TableName: !Ref DynamoDBTableName
+          - S3WritePolicy:
+              BucketName: !Ref AthenaBucketName
+          - Statement:
+              Effect: Allow
+              Action:
+                - dynamodb:DescribeStream
+                - dynamodb:GetRecords
+                - dynamodb:GetShardIterator
+                - dynamodb:ListStreams
+              Resource: !GetAtt DynamoDBTable.StreamArn
+
+        Environment:
+          Variables:
+            DYNAMODB_TABLE_NAME: !Ref DynamoDBTableName
+            ATHENA_BUCKET_NAME: !Ref AthenaBucketName
+
+   
+  AggregatorEventSourceMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      BatchSize: 100
+      EventSourceArn: !GetAtt DynamoDBTable.StreamArn
+      FunctionName: !GetAtt AggregatorLambdaFunction.Arn
+      StartingPosition: TRIM_HORIZON
+
+Outputs:
+  S3UploadBucketName:
+    Description: "S3 Upload Bucket Name"
+    Value: !Ref S3UploadBucket
+  S3AthenaBucketName:
+    Description: "S3 Athena Bucket Name"
+    Value: !Ref S3AthenaBucket
+  KinesisStreamName:
+    Description: "Kinesis Data Stream Name"
+    Value: !Ref KinesisStreamName
+  DynamoDBTableName:
+    Description: "DynamoDB Table Name"
+    Value: !Ref DynamoDBTableName
