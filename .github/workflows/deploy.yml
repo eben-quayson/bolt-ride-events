@@ -50,3 +50,16 @@ jobs:
         run: |
           cd tests  
           python -m unittest discover -s . -p 'test_aggregation.py'
+
+      - name: Deploy to AWS SAM
+        run: |
+          cd lambda/aggregator
+          sam deploy --config-file samconfig.toml \
+            --parameter-overrides \
+            UploadBucketName="${{ secrets.UPLOAD_BUCKET_NAME }}" \
+            AthenaBucketName="${{ secrets.ATHENA_BUCKET_NAME }}" \
+            KinesisStreamName="${{ secrets.KINESIS_STREAM_NAME }}" \
+            DynamoDBTableName="${{ secrets.DYNAMODB_TABLE_NAME }}" \
+            DynamoDBTableReadCapacityUnits="${{ secrets.DYNAMODB_TABLE_READ_CAPACITY_UNITS }}" \
+            DynamoDBTableWriteCapacityUnits="${{ secrets.DYNAMODB_TABLE_WRITE_CAPACITY_UNITS }}" \
+            --capabilities CAPABILITY_IAM
