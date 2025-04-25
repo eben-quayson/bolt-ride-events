@@ -1,0 +1,7 @@
+pandas
+pytest
+boto3
+pytest-mock
+pytest-cov
+pytest-asyncio
+
