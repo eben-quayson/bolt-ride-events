@@ -1,50 +1,54 @@
-name: AWS SAM CI/CD Pipeline
+name: AWS SAM Build and Test
 
 on:
   push:
     branches:
-      - main  # Trigger on push to the main branch
+      - main  # Trigger this workflow on pushes to the main branch
   pull_request:
     branches:
-      - main  # Trigger on pull request to the main branch
+      - main  # Also run on pull requests targeting the main branch
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  sam-build-test:
+    runs-on: ubuntu-latest  # Use the latest Ubuntu runner
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
+      - name: Checkout the code
+        uses: actions/checkout@v2
 
-    - name: Set up Python
-      uses: actions/setup-python@v2
-      with:
-        python-version: '3.11'  # Use the appropriate version of Python
+      # Set up Python environment
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.11'  # Use the appropriate version of Python
 
-    - name: Install AWS SAM CLI
-      run: |
-        curl -sSL https://github.com/aws/aws-sam-cli/releases/latest/download/aws-sam-cli-linux-x86_64.zip -o sam-cli.zip
-        unzip sam-cli.zip -d sam-cli
-        sudo ./sam-cli/install
+      # Install AWS SAM CLI
+      - name: Install AWS SAM CLI
+        run: |
+          curl -sSL https://github.com/aws/aws-sam-cli/releases/latest/download/aws-sam-cli-linux-x86_64.zip -o sam-cli.zip
+          unzip sam-cli.zip -d sam-cli
+          sudo ./sam-cli/install
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r lambda_functions/aggregator/requirements.txt  
-    
-    - name: Build the AWS SAM project
-      run: |
-        cd lambda/aggregator  
-        sam build
+      # Install dependencies from the requirements file
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r lambda_functions/aggregator/requirements.txt  
 
-    - name: Validate SAM template
-      run: |
-        cd lambda_functions/aggregator  
-        sam validate --lint
+      # Build the AWS SAM project
+      - name: Build the AWS SAM project
+        run: |
+          cd lambda_functions/aggregator  
+          sam build
 
-    - name: Run unit tests for Lambda function
-      run: |
-        cd lambda_functions/aggregator             
-        python -m unittest tests/test_aggregation.py
+      # Validate SAM template
+      - name: Validate SAM template
+        run: |
+          cd lambda_functions/aggregator  
+          sam validate --lint
 
-
+      # Run unit tests for the Lambda function using unittest
+      - name: Run unit tests for Lambda function
+        run: |
+          cd tests  
+          python -m unittest discover -s . -p 'test_aggregation.py'
