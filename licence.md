@@ -1,0 +1,3 @@
+## LICENCE
+
+# MIT LICENCE
