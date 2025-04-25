@@ -1,0 +1,41 @@
+{
+  "Records": [
+    {
+      "eventID": "1",
+      "eventName": "INSERT",
+      "eventVersion": "1.0",
+      "eventSource": "aws:dynamodb",
+      "awsRegion": "us-west-2",
+      "dynamodb": {
+        "Keys": {
+          "trip_id": {
+            "S": "12345"
+          }
+        },
+        "NewImage": {
+          "trip_id": {
+            "S": "12345"
+          },
+          "fare_amount": {
+            "N": "25.50"
+          },
+          "estimated_fare_amount": {
+            "N": "30.00"
+          },
+          "pickup_datetime": {
+            "S": "2025-04-20T08:30:00Z"
+          }
+        },
+        "SequenceNumber": "123456789",
+        "SizeBytes": 123,
+        "StreamViewType": "NEW_IMAGE"
+      },
+      "eventSourceARN": "arn:aws:dynamodb:us-west-2:123456789012:table/your-table-name/stream/2025-04-19T16:00:00.000"
+    }
+  ],
+  "custom_payload": {
+    "aggregation_date": "2025-04-20",
+    "aggregation_type": "daily",
+    "additional_info": "Custom aggregation logic based on trip details"
+  }
+}
