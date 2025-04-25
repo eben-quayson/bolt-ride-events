@@ -1,9 +1,6 @@
 name: AWS SAM Build and Test
 
 on:
-  push:
-    branches:
-      - main  # Trigger this workflow on pushes to the main branch
   pull_request:
     branches:
       - main  # Also run on pull requests targeting the main branch
