@@ -53,7 +53,6 @@ jobs:
 
       - name: Deploy to AWS SAM
         run: |
-          cd lambda/aggregator
           sam deploy --config-file samconfig.toml \
             --parameter-overrides \
             UploadBucketName="${{ secrets.UPLOAD_BUCKET_NAME }}" \
